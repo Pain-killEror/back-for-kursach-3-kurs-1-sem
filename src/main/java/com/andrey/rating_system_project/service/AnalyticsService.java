@@ -55,6 +55,7 @@ public class AnalyticsService {
         return response;
     }
 
+    // ИЗМЕНЕНИЕ 1: Добавляем проверку на rectorateId
     private WidgetDataDto calculateWidgetData(String widgetId, Map<String, Object> filters) {
         if (filters.containsKey("rectorateId")) {
             return calculateRectorateWidgetData(widgetId, filters);
@@ -71,12 +72,11 @@ public class AnalyticsService {
 
     // --- ДИСПЕТЧЕРЫ ПО РОЛЯМ ---
 
+    // ИЗМЕНЕНИЕ 2: Добавляем новый диспетчер для ректората
     private WidgetDataDto calculateRectorateWidgetData(String widgetId, Map<String, Object> filters) {
         switch (widgetId) {
             case "facultyPerformanceComparison":
                 return new WidgetDataDto("Сравнение факультетов", "BAR_CHART", studentGradeRepository.getFacultyPerformanceComparison());
-            case "enrollmentDynamics":
-                return new WidgetDataDto("Динамика набора", "COMBO_CHART", studentGradeRepository.getEnrollmentDynamics());
             case "educationFormDistribution":
                 return new WidgetDataDto("Формы обучения", "PIE_CHART", studentInfoRepository.countByEducationForm());
             case "extracurricularActivityOverview":
@@ -234,7 +234,6 @@ public class AnalyticsService {
 
     private WidgetDataDto calculateLatestActions() {
         List<SystemLog> logs = systemLogRepository.findTop10ByOrderByCreatedAtDesc();
-        // Преобразуем в DTO
         List<SystemLogDto> logDtos = logs.stream()
                 .map(SystemLogDto::new)
                 .collect(Collectors.toList());
@@ -257,14 +256,12 @@ public class AnalyticsService {
         return new WidgetDataDto("Успеваемость моих студентов", "TABLE", performanceData);
     }
 
-    // ИЗМЕНЕНИЯ ЗДЕСЬ
     private WidgetDataDto calculateMyLatestAchievements(Map<String, Object> filters) {
         Integer teacherId = (Integer) filters.get("teacherId");
         if (teacherId == null) {
             throw new IllegalArgumentException("teacherId is required for this widget");
         }
         List<Achievement> achievements = achievementRepository.findTop5ByAddedByIdOrderByCreatedAtDesc(teacherId);
-        // Преобразуем список сущностей в список DTO
         List<AchievementDto> achievementDtos = achievements.stream()
                 .map(AchievementDto::new)
                 .collect(Collectors.toList());

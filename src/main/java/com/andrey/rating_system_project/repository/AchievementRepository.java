@@ -65,17 +65,18 @@ public interface AchievementRepository extends JpaRepository<Achievement, Intege
     ///
 
 
+    // НОВЫЙ МЕТОД: Обзор внеучебной деятельности по факультетам
     @Query(value = """
-        SELECT f.name as facultyName, at.category as category, SUM(a.points_awarded) as totalPoints
-        FROM achievements a
-        JOIN achievement_types at ON a.type_id = at.id
-        JOIN users u ON a.student_user_id = u.id
-        JOIN students_info si ON u.id = si.user_id
-        JOIN `groups` g ON si.group_id = g.id
-        JOIN faculties f ON g.faculty_id = f.id
-        GROUP BY f.name, at.category
-        ORDER BY f.name, category
-    """, nativeQuery = true)
+            SELECT f.name as facultyName, at.category as category, SUM(a.points_awarded) as totalPoints
+            FROM achievements a
+            JOIN achievement_types at ON a.type_id = at.id
+            JOIN users u ON a.student_user_id = u.id
+            JOIN students_info si ON u.id = si.user_id
+            JOIN `groups` g ON si.group_id = g.id
+            JOIN faculties f ON g.faculty_id = f.id
+            GROUP BY f.name, at.category
+            ORDER BY f.name, at.category
+            """, nativeQuery = true)
     List<FacultyActivityDto> getFacultyExtracurricularActivity();
 
 }

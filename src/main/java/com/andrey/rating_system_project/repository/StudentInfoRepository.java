@@ -12,7 +12,9 @@ import java.util.List;
 public interface StudentInfoRepository extends JpaRepository<StudentInfo, Integer> {
 
 
-        @Query("SELECT new com.andrey.rating_system_project.dto.analytics.StatItemDto(CAST(si.educationForm AS string), COUNT(si.id)) FROM StudentInfo si GROUP BY si.educationForm")
+        // НОВЫЙ МЕТОД: Подсчет студентов по форме обучения
+        @Query("SELECT new com.andrey.rating_system_project.dto.analytics.StatItemDto(CAST(si.educationForm AS string), COUNT(si.id)) " +
+                "FROM StudentInfo si GROUP BY si.educationForm")
         List<StatItemDto> countByEducationForm();
 
 }

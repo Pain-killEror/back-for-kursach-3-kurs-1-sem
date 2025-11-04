@@ -266,18 +266,6 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
 
     List<StudentGrade> findByStudentIdAndSubjectIdAndTeacherIdOrderByExamDateDesc(Integer studentId, Integer subjectId, Integer teacherId);
 
-    @Query(value = """
-        SELECT f.name AS facultyName, AVG(sg.mark) AS averageMark
-        FROM student_grades sg
-        JOIN users u ON sg.student_user_id = u.id
-        JOIN students_info si ON u.id = si.user_id
-        JOIN `groups` g ON si.group_id = g.id
-        JOIN faculties f ON g.faculty_id = f.id
-        WHERE sg.assessment_type IN ('EXAM', 'DIFFERENTIATED_CREDIT', 'COURSEWORK')
-        GROUP BY f.id, f.name
-        ORDER BY averageMark DESC
-    """, nativeQuery = true)
-    List<FacultyComparisonDto> getFacultyPerformanceComparison();
 
     @Query(value = """
         SELECT
@@ -323,4 +311,18 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
             ORDER BY averageMark DESC
             """, nativeQuery = true)
     List<ComparisonItemDto> getGroupComparisonForTeacher(@Param("teacherId") Integer teacherId);
+
+    // НОВЫЙ МЕТОД: Сравнение успеваемости по факультетам
+    @Query(value = """
+            SELECT f.name AS facultyName, AVG(sg.mark) AS averageMark
+            FROM student_grades sg
+            JOIN users u ON sg.student_user_id = u.id
+            JOIN students_info si ON u.id = si.user_id
+            JOIN `groups` g ON si.group_id = g.id
+            JOIN faculties f ON g.faculty_id = f.id
+            WHERE sg.assessment_type IN ('EXAM', 'DIFFERENTIATED_CREDIT', 'COURSEWORK')
+            GROUP BY f.id, f.name
+            ORDER BY averageMark DESC
+            """, nativeQuery = true)
+    List<FacultyComparisonDto> getFacultyPerformanceComparison();
 }
