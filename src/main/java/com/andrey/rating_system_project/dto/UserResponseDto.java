@@ -15,8 +15,11 @@ public class UserResponseDto {
     private UserStatus status;
     private String roleName;
 
+    // Информация о студенте
     private String groupName;
     private String specialtyName;
+
+    // Информация о сотруднике/студенте
     private String facultyName;
 
     public UserResponseDto(User user) {
@@ -42,6 +45,10 @@ public class UserResponseDto {
                     }
                 }
             }
+        }
+        // ИЗМЕНЕНИЕ: Если пользователь не студент, но у него есть привязка к факультету (например, сотрудник деканата)
+        else if (user.getFaculty() != null) {
+            this.facultyName = user.getFaculty().getName();
         }
     }
 }
