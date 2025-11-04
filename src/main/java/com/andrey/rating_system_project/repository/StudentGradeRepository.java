@@ -3,6 +3,7 @@ package com.andrey.rating_system_project.repository;
 import com.andrey.rating_system_project.dto.analytics.*;
 import com.andrey.rating_system_project.model.StudentGrade;
 import org.springframework.data.jpa.repository.JpaRepository;
+import com.andrey.rating_system_project.dto.analytics.StudentPerformanceDto;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -291,4 +292,35 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
         ORDER BY year ASC
     """, nativeQuery = true)
     List<EnrollmentDynamicsDto> getEnrollmentDynamics();
+
+    // НОВЫЙ МЕТОД 1: Успеваемость студентов для конкретного преподавателя
+    @Query(value = """
+            SELECT
+                u.id AS studentId,
+                u.full_name AS studentFullName,
+                g.name AS groupName,
+                AVG(sg.mark) AS averageMark
+            FROM student_grades sg
+            JOIN users u ON sg.student_user_id = u.id
+            JOIN students_info si ON u.id = si.user_id
+            JOIN `groups` g ON si.group_id = g.id
+            WHERE sg.teacher_user_id = :teacherId
+            GROUP BY u.id, u.full_name, g.name
+            ORDER BY averageMark DESC
+            """, nativeQuery = true)
+    List<StudentPerformanceDto> getStudentPerformanceForTeacher(@Param("teacherId") Integer teacherId);
+
+    // НОВЫЙ МЕТОД 2: Сравнение групп для конкретного преподавателя
+    @Query(value = """
+            SELECT
+                g.name AS groupName,
+                AVG(sg.mark) AS averageMark
+            FROM student_grades sg
+            JOIN students_info si ON sg.student_user_id = si.user_id
+            JOIN `groups` g ON si.group_id = g.id
+            WHERE sg.teacher_user_id = :teacherId
+            GROUP BY g.id, g.name
+            ORDER BY averageMark DESC
+            """, nativeQuery = true)
+    List<ComparisonItemDto> getGroupComparisonForTeacher(@Param("teacherId") Integer teacherId);
 }

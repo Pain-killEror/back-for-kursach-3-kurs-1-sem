@@ -13,6 +13,8 @@ import java.util.List;
 @Repository
 public interface AchievementRepository extends JpaRepository<Achievement, Integer> {
 
+
+    List<Achievement> findTop5ByAddedByIdOrderByCreatedAtDesc(Integer addedById);
     @Query(value = """
         SELECT
             at.category AS category,
