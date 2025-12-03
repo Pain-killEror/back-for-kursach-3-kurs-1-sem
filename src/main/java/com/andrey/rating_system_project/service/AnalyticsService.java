@@ -195,34 +195,31 @@ public class AnalyticsService {
         return (List<StudentRankingDto>) map.get("data");
     }
 
+    // ... Стандартные методы для других ролей ...
     private WidgetDataDto calculatePerformanceDistribution(Map<String, Object> filters) {
         CommonFilters f = extractCommonFilters(filters);
         List<DistributionItemDto> distribution = studentGradeRepository.getPerformanceDistribution(
                 f.facultyId(), f.formationYear(), f.groupId(), f.assessmentTypes(), f.educationForm());
         return new WidgetDataDto("Распределение по успеваемости", "BAR_CHART", distribution);
     }
-
     private WidgetDataDto calculateAverageScoreDynamics(Map<String, Object> filters) {
         CommonFilters f = extractCommonFilters(filters);
         List<DynamicsPointDto> dynamics = studentGradeRepository.getAverageScoreDynamics(
                 f.facultyId(), f.formationYear(), f.groupId(), f.assessmentTypes(), f.educationForm());
         return new WidgetDataDto("Динамика среднего балла", "LINE_CHART", dynamics);
     }
-
     private WidgetDataDto calculateKeyMetrics(Map<String, Object> filters) {
         CommonFilters f = extractCommonFilters(filters);
         KeyMetricsDto metrics = studentGradeRepository.getKeyMetrics(
                 f.facultyId(), f.formationYear(), f.groupId(), f.assessmentTypes(), f.educationForm());
         return new WidgetDataDto("Ключевые показатели", "KPI_CARDS", metrics);
     }
-
     private WidgetDataDto calculateGroupComparison(Map<String, Object> filters) {
         CommonFilters f = extractCommonFilters(filters);
         List<ComparisonItemDto> comparisonData = studentGradeRepository.getGroupComparison(
                 f.facultyId(), f.formationYear(), f.assessmentTypes(), f.educationForm());
         return new WidgetDataDto("Сравнение успеваемости групп", "COLUMN_CHART", comparisonData);
     }
-
     private WidgetDataDto calculateContributionAnalysis(Map<String, Object> filters) {
         CommonFilters f = extractCommonFilters(filters);
         List<ContributionItemDto> contributionData = new ArrayList<>(
@@ -234,34 +231,28 @@ public class AnalyticsService {
         }
         return new WidgetDataDto("Вклад в общий рейтинг", "PIE_CHART", contributionData);
     }
-
     private WidgetDataDto calculateRoleStatistics() {
         List<StatItemDto> stats = userRepository.countUsersByRole();
         return new WidgetDataDto("Статистика по ролям", "PIE_CHART", stats);
     }
-
     private WidgetDataDto calculateUserStatusOverview() {
         List<StatItemDto> stats = userRepository.countUsersByStatus();
         return new WidgetDataDto("Статус пользователей", "BAR_CHART", stats);
     }
-
     private WidgetDataDto calculateLatestActions() {
         List<SystemLog> logs = systemLogRepository.findTop10ByOrderByCreatedAtDesc();
         List<SystemLogDto> logDtos = logs.stream().map(SystemLogDto::new).collect(Collectors.toList());
         return new WidgetDataDto("Последние действия", "LOG_LIST", logDtos);
     }
-
     private WidgetDataDto calculateRegistrationDynamics() {
         List<StatItemDto> stats = userRepository.countRegistrationsLast7Days();
         return new WidgetDataDto("Динамика регистраций (7 дней)", "LINE_CHART", stats);
     }
-
     private WidgetDataDto calculateMyStudentPerformance(Map<String, Object> filters) {
         Integer teacherId = (Integer) filters.get("teacherId");
         if (teacherId == null) throw new IllegalArgumentException("teacherId is required");
         return new WidgetDataDto("Успеваемость моих студентов", "TABLE", studentGradeRepository.getStudentPerformanceForTeacher(teacherId));
     }
-
     private WidgetDataDto calculateMyLatestAchievements(Map<String, Object> filters) {
         Integer teacherId = (Integer) filters.get("teacherId");
         if (teacherId == null) throw new IllegalArgumentException("teacherId is required");
@@ -269,14 +260,13 @@ public class AnalyticsService {
         List<AchievementDto> achievementDtos = achievements.stream().map(AchievementDto::new).collect(Collectors.toList());
         return new WidgetDataDto("Последние добавленные достижения", "ACHIEVEMENT_LIST", achievementDtos);
     }
-
     private WidgetDataDto calculateMyGroupComparison(Map<String, Object> filters) {
         Integer teacherId = (Integer) filters.get("teacherId");
         if (teacherId == null) throw new IllegalArgumentException("teacherId is required");
         return new WidgetDataDto("Сравнение успеваемости групп", "BAR_CHART", studentGradeRepository.getGroupComparisonForTeacher(teacherId));
     }
 
-    // --- ИЗМЕНЕННЫЙ МЕТОД ДЛЯ ДЕТАЛИЗАЦИИ БАЛЛОВ (FIXED: CUMULATIVE BY DEFAULT) ---
+    // --- ИЗМЕНЕННЫЙ МЕТОД ДЛЯ ДЕТАЛИЗАЦИИ БАЛЛОВ (ТОЛЬКО ДОСТИЖЕНИЯ) ---
     private WidgetDataDto calculateMyScoreBreakdown(Map<String, Object> filters) {
         Integer studentId = (Integer) filters.get("studentId");
         List<Object[]> rawData = studentGradeRepository.getDetailedBreakdownBySemester(studentId);
@@ -300,11 +290,14 @@ public class AnalyticsService {
             Long sem = selectedSemester;
             items = rawData.stream()
                     .filter(row -> ((Number) row[0]).longValue() == sem)
+                    // ИЗМЕНЕНИЕ: Берем ТОЛЬКО категории достижений, исключаем ACADEMIC
+                    .filter(row -> !"ACADEMIC".equals((String) row[1]))
                     .map(row -> new ContributionItemDto((String) row[1], (BigDecimal) row[2]))
                     .collect(Collectors.toList());
         } else {
             // СУММИРУЕМ ВСЕ (Накопительный итог)
             Map<String, BigDecimal> accumulated = rawData.stream()
+                    .filter(row -> !"ACADEMIC".equals((String) row[1])) // ИЗМЕНЕНИЕ: Исключаем ACADEMIC
                     .collect(Collectors.groupingBy(
                             row -> (String) row[1], // Категория
                             Collectors.reducing(BigDecimal.ZERO, row -> (BigDecimal) row[2], BigDecimal::add)
@@ -316,7 +309,7 @@ public class AnalyticsService {
 
         Map<String, Object> resultData = new HashMap<>();
         resultData.put("availableSemesters", semesters);
-        resultData.put("selectedSemester", selectedSemester); // Если null, значит "Все семестры"
+        resultData.put("selectedSemester", selectedSemester);
         resultData.put("breakdown", items);
 
         return new WidgetDataDto("Детализация баллов", "BAR_CHART_COMPLEX", resultData);
