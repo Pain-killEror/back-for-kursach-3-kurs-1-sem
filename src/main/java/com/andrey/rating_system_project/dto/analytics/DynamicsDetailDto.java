@@ -13,5 +13,9 @@ public class DynamicsDetailDto {
     private Long semester;
     private BigDecimal academicScoreInSemester; // Средний балл за этот семестр
     private BigDecimal achievementsInSemester;  // Баллы за достижения в этом семестре
-    private BigDecimal absencePenaltyInSemester;  // Штрафы за пропуски в этом семестре
+
+    // --- ИЗМЕНЕНИЯ: Вместо штрафа храним часы по типам ---
+    private BigDecimal absencePenaltyInSemester; // Оставляем для совместимости (штраф)
+    private BigDecimal unexcusedHoursInSemester; // Часы неуважительных пропусков
+    private BigDecimal excusedHoursInSemester;   // Часы уважительных пропусков
 }

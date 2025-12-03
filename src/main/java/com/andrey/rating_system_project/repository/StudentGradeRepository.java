@@ -55,7 +55,8 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
 
     @Query(value = """
             SELECT
-                (YEAR(sg.exam_date) - g.formation_year - IF(MONTH(sg.exam_date) < 9, 1, 0)) * 2 + IF(MONTH(sg.exam_date) < 9, 2, 1) AS semester,
+                -- ИЗМЕНЕНИЕ: GREATEST(1, ...) чтобы не было 0-го семестра
+                GREATEST(1, (YEAR(sg.exam_date) - g.formation_year - IF(MONTH(sg.exam_date) < 9, 1, 0)) * 2 + IF(MONTH(sg.exam_date) < 9, 2, 1)) AS semester,
                 AVG(sg.mark) as averageMark
             FROM student_grades sg
             JOIN users u ON sg.student_user_id = u.id
@@ -154,7 +155,6 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
             @Param("educationForm") String educationForm
     );
 
-    // --- Метод для получения общего рейтинга студентов ---
     @Query(value = """
             WITH AcademicScores AS (
                 SELECT
@@ -176,7 +176,6 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
                     sa.student_user_id AS student_id,
                     SUM(CASE WHEN sa.reason_type = 'UNEXCUSED' THEN sa.hours ELSE 0 END) AS unexcused_hours,
                     SUM(CASE WHEN sa.reason_type = 'EXCUSED' THEN sa.hours ELSE 0 END) AS excused_hours,
-                    -- ЗДЕСЬ МЫ УМНОЖАЕМ НА 0.1 (1 час = 0.1 балл штрафа)
                     SUM(CASE WHEN sa.reason_type = 'UNEXCUSED' THEN sa.hours ELSE 0 END) * 0.1 AS absence_penalty
                 FROM student_absences sa
                 GROUP BY sa.student_user_id
@@ -213,7 +212,6 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
             @Param("educationForm") String educationForm
     );
 
-    // --- Метод для среднего балла (по всем оценкам) ---
     @Query(value = """
             SELECT AVG(sg.mark)
             FROM student_grades sg
@@ -221,11 +219,11 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
             """, nativeQuery = true)
     BigDecimal getStudentAverageAcademicScore(@Param("studentId") Integer studentId);
 
-    // --- Метод для графика динамики ---
+    // --- ОБНОВЛЕННЫЙ МЕТОД С GREATEST(1, ...) ---
     @Query(value = """
             WITH AllActivitiesWithSemester AS (
                 SELECT
-                    (YEAR(sg.exam_date) - g.formation_year - IF(MONTH(sg.exam_date) < 9, 1, 0)) * 2 + IF(MONTH(sg.exam_date) < 9, 2, 1) AS semester,
+                    GREATEST(1, (YEAR(sg.exam_date) - g.formation_year - IF(MONTH(sg.exam_date) < 9, 1, 0)) * 2 + IF(MONTH(sg.exam_date) < 9, 2, 1)) AS semester,
                     'ACADEMIC' as type,
                     sg.mark as points
                 FROM student_grades sg
@@ -234,7 +232,7 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
                 WHERE sg.student_user_id = :studentId
                 UNION ALL
                 SELECT
-                    (YEAR(a.achievement_date) - g.formation_year - IF(MONTH(a.achievement_date) < 9, 1, 0)) * 2 + IF(MONTH(a.achievement_date) < 9, 2, 1) AS semester,
+                    GREATEST(1, (YEAR(a.achievement_date) - g.formation_year - IF(MONTH(a.achievement_date) < 9, 1, 0)) * 2 + IF(MONTH(a.achievement_date) < 9, 2, 1)) AS semester,
                     'ACHIEVEMENT' as type,
                     a.points_awarded as points
                 FROM achievements a
@@ -243,10 +241,12 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
                 WHERE a.student_user_id = :studentId
                 UNION ALL
                 SELECT
-                    (YEAR(sa.absence_date) - g.formation_year - IF(MONTH(sa.absence_date) < 9, 1, 0)) * 2 + IF(MONTH(sa.absence_date) < 9, 2, 1) AS semester,
-                    'ABSENCE' as type,
-                    -- ЗДЕСЬ ТОЖЕ УМНОЖАЕМ НА 0.1 (отрицательное значение для графика)
-                    -sa.hours * 0.1 as points
+                    GREATEST(1, (YEAR(sa.absence_date) - g.formation_year - IF(MONTH(sa.absence_date) < 9, 1, 0)) * 2 + IF(MONTH(sa.absence_date) < 9, 2, 1)) AS semester,
+                    CASE 
+                        WHEN sa.reason_type = 'EXCUSED' THEN 'ABSENCE_EXCUSED' 
+                        ELSE 'ABSENCE_UNEXCUSED' 
+                    END as type,
+                    sa.hours as points
                 FROM student_absences sa
                 JOIN students_info si ON sa.student_user_id = si.user_id
                 JOIN `groups` g ON si.group_id = g.id
@@ -257,7 +257,9 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
                 semester,
                 AVG(CASE WHEN type = 'ACADEMIC' THEN points END) as academicScoreInSemester,
                 SUM(CASE WHEN type = 'ACHIEVEMENT' THEN points ELSE 0 END) as achievementsInSemester,
-                SUM(CASE WHEN type = 'ABSENCE' THEN points ELSE 0 END) as absencePenaltyInSemester
+                SUM(CASE WHEN type = 'ABSENCE_UNEXCUSED' THEN -points * 0.1 ELSE 0 END) as absencePenaltyInSemester,
+                SUM(CASE WHEN type = 'ABSENCE_UNEXCUSED' THEN points ELSE 0 END) as unexcusedHoursInSemester,
+                SUM(CASE WHEN type = 'ABSENCE_EXCUSED' THEN points ELSE 0 END) as excusedHoursInSemester
             FROM AllActivitiesWithSemester
             GROUP BY semester
             ORDER BY semester ASC

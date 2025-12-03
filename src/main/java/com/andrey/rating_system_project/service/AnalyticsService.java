@@ -55,7 +55,6 @@ public class AnalyticsService {
         return response;
     }
 
-    // ИЗМЕНЕНИЕ 1: Добавляем проверку на rectorateId
     private WidgetDataDto calculateWidgetData(String widgetId, Map<String, Object> filters) {
         if (filters.containsKey("rectorateId")) {
             return calculateRectorateWidgetData(widgetId, filters);
@@ -69,10 +68,8 @@ public class AnalyticsService {
         return calculateDeanStaffWidgetData(widgetId, filters);
     }
 
-
     // --- ДИСПЕТЧЕРЫ ПО РОЛЯМ ---
 
-    // ИЗМЕНЕНИЕ 2: Добавляем новый диспетчер для ректората
     private WidgetDataDto calculateRectorateWidgetData(String widgetId, Map<String, Object> filters) {
         switch (widgetId) {
             case "facultyPerformanceComparison":
@@ -205,8 +202,10 @@ public class AnalyticsService {
         CommonFilters f = extractCommonFilters(filters);
         List<ContributionItemDto> contributionData = new ArrayList<>(
                 achievementRepository.getAchievementsContribution(f.facultyId(), f.formationYear(), f.groupId()));
+
         BigDecimal academicPoints = studentGradeRepository.getTotalAcademicPoints(
                 f.facultyId(), f.formationYear(), f.groupId(), f.assessmentTypes(), f.educationForm());
+
         if (academicPoints != null) {
             contributionData.add(new ContributionItemDto("ACADEMIC", academicPoints));
         }
@@ -277,7 +276,6 @@ public class AnalyticsService {
         return new WidgetDataDto("Сравнение успеваемости групп", "BAR_CHART", comparisonData);
     }
 
-
     // --- МЕТОДЫ РАСЧЕТА (ДЛЯ СТУДЕНТА) ---
 
     private List<StudentRankingDto> getStudentRankingListForContext(Map<String, Object> filters) {
@@ -311,6 +309,7 @@ public class AnalyticsService {
         Integer studentId = (Integer) filters.get("studentId");
         List<ContributionItemDto> breakdownData = new ArrayList<>(
                 achievementRepository.getStudentAchievementsContribution(studentId));
+
         BigDecimal academicScore = studentGradeRepository.getStudentAverageAcademicScore(studentId);
         if (academicScore != null) {
             breakdownData.add(new ContributionItemDto("ACADEMIC", academicScore));
@@ -332,18 +331,26 @@ public class AnalyticsService {
 
         BigDecimal cumulativeTotal = BigDecimal.ZERO;
         BigDecimal cumulativeAchievements = BigDecimal.ZERO;
-        BigDecimal cumulativeAbsences = BigDecimal.ZERO;
+        // Новые переменные для накопления часов
+        BigDecimal cumulativeUnexcusedHours = BigDecimal.ZERO;
+        BigDecimal cumulativeExcusedHours = BigDecimal.ZERO;
 
         for (DynamicsDetailDto detail : details) {
             BigDecimal academicScore = detail.getAcademicScoreInSemester() != null ? detail.getAcademicScoreInSemester() : BigDecimal.ZERO;
             BigDecimal achievements = detail.getAchievementsInSemester() != null ? detail.getAchievementsInSemester() : BigDecimal.ZERO;
-            BigDecimal absences = detail.getAbsencePenaltyInSemester() != null ? detail.getAbsencePenaltyInSemester() : BigDecimal.ZERO;
+            // penalty это уже отрицательное значение (например -0.2)
+            BigDecimal penalty = detail.getAbsencePenaltyInSemester() != null ? detail.getAbsencePenaltyInSemester() : BigDecimal.ZERO;
 
-            BigDecimal totalInSemester = academicScore.add(achievements).add(absences);
+            BigDecimal unexcusedHours = detail.getUnexcusedHoursInSemester() != null ? detail.getUnexcusedHoursInSemester() : BigDecimal.ZERO;
+            BigDecimal excusedHours = detail.getExcusedHoursInSemester() != null ? detail.getExcusedHoursInSemester() : BigDecimal.ZERO;
+
+            // Общий рейтинг = (Учеба + Достижения) - Штраф (penalty тут уже с минусом из SQL, поэтому + penalty)
+            BigDecimal totalInSemester = academicScore.add(achievements).add(penalty);
 
             cumulativeTotal = cumulativeTotal.add(totalInSemester);
             cumulativeAchievements = cumulativeAchievements.add(achievements);
-            cumulativeAbsences = cumulativeAbsences.add(absences);
+            cumulativeUnexcusedHours = cumulativeUnexcusedHours.add(unexcusedHours);
+            cumulativeExcusedHours = cumulativeExcusedHours.add(excusedHours);
 
             if (lines.contains("cumulativeTotal")) {
                 resultLines.computeIfAbsent("cumulativeTotal", k -> new ArrayList<>())
@@ -361,11 +368,18 @@ public class AnalyticsService {
                 resultLines.computeIfAbsent("achievements", k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), cumulativeAchievements));
             }
-            if (lines.contains("absences")) {
-                resultLines.computeIfAbsent("absences", k -> new ArrayList<>())
-                        .add(new DynamicsPointDto(detail.getSemester(), cumulativeAbsences));
+
+            // --- ИЗМЕНЕНИЯ: Обработка новых линий для часов ---
+            if (lines.contains("excused")) {
+                resultLines.computeIfAbsent("excused", k -> new ArrayList<>())
+                        .add(new DynamicsPointDto(detail.getSemester(), cumulativeExcusedHours));
+            }
+            if (lines.contains("unexcused")) {
+                resultLines.computeIfAbsent("unexcused", k -> new ArrayList<>())
+                        .add(new DynamicsPointDto(detail.getSemester(), cumulativeUnexcusedHours));
             }
         }
+
         return new WidgetDataDto("Динамика моего рейтинга", "MULTI_LINE_CHART", resultLines);
     }
 
