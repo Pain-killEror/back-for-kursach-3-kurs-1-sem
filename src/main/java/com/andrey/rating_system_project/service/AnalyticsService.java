@@ -322,29 +322,61 @@ public class AnalyticsService {
         String absenceType = (String) filters.get("absenceType");
         List<String> lines = (List<String>) filters.get("lines");
 
+        // --- ИЗМЕНЕНИЕ: Получаем ID студента для сравнения ---
+        Object compareWithIdObj = filters.get("compareWithStudentId");
+        Integer compareWithStudentId = null;
+        if (compareWithIdObj != null) {
+            if (compareWithIdObj instanceof Integer) {
+                compareWithStudentId = (Integer) compareWithIdObj;
+            } else if (compareWithIdObj instanceof String) {
+                try {
+                    compareWithStudentId = Integer.parseInt((String) compareWithIdObj);
+                } catch (NumberFormatException e) {
+                    // ignore invalid format
+                }
+            }
+        }
+
         if (lines == null || lines.isEmpty()) {
             return new WidgetDataDto("Динамика моего рейтинга", "MULTI_LINE_CHART", new HashMap<>());
         }
 
+        // 1. Считаем динамику для текущего студента
+        Map<String, List<DynamicsPointDto>> resultLines = new HashMap<>(
+                calculateDynamicsForStudent(studentId, absenceType, lines, "")
+        );
+
+        // 2. Если есть ID для сравнения, считаем динамику для него и мержим результаты
+        if (compareWithStudentId != null) {
+            Map<String, List<DynamicsPointDto>> compareLines =
+                    calculateDynamicsForStudent(compareWithStudentId, absenceType, lines, "_compare");
+            resultLines.putAll(compareLines);
+        }
+
+        return new WidgetDataDto("Динамика моего рейтинга", "MULTI_LINE_CHART", resultLines);
+    }
+
+    // --- НОВЫЙ ВСПОМОГАТЕЛЬНЫЙ МЕТОД ---
+    // Вынес логику расчета, чтобы можно было вызывать для разных студентов
+    private Map<String, List<DynamicsPointDto>> calculateDynamicsForStudent(
+            Integer studentId, String absenceType, List<String> lines, String keySuffix) {
+
         List<DynamicsDetailDto> details = studentGradeRepository.getStudentDynamicsDetails(studentId, absenceType);
-        Map<String, List<DynamicsPointDto>> resultLines = new HashMap<>();
+        Map<String, List<DynamicsPointDto>> result = new HashMap<>();
 
         BigDecimal cumulativeTotal = BigDecimal.ZERO;
         BigDecimal cumulativeAchievements = BigDecimal.ZERO;
-        // Новые переменные для накопления часов
         BigDecimal cumulativeUnexcusedHours = BigDecimal.ZERO;
         BigDecimal cumulativeExcusedHours = BigDecimal.ZERO;
 
         for (DynamicsDetailDto detail : details) {
             BigDecimal academicScore = detail.getAcademicScoreInSemester() != null ? detail.getAcademicScoreInSemester() : BigDecimal.ZERO;
             BigDecimal achievements = detail.getAchievementsInSemester() != null ? detail.getAchievementsInSemester() : BigDecimal.ZERO;
-            // penalty это уже отрицательное значение (например -0.2)
             BigDecimal penalty = detail.getAbsencePenaltyInSemester() != null ? detail.getAbsencePenaltyInSemester() : BigDecimal.ZERO;
 
             BigDecimal unexcusedHours = detail.getUnexcusedHoursInSemester() != null ? detail.getUnexcusedHoursInSemester() : BigDecimal.ZERO;
             BigDecimal excusedHours = detail.getExcusedHoursInSemester() != null ? detail.getExcusedHoursInSemester() : BigDecimal.ZERO;
 
-            // Общий рейтинг = (Учеба + Достижения) - Штраф (penalty тут уже с минусом из SQL, поэтому + penalty)
             BigDecimal totalInSemester = academicScore.add(achievements).add(penalty);
 
             cumulativeTotal = cumulativeTotal.add(totalInSemester);
@@ -353,34 +385,31 @@ public class AnalyticsService {
             cumulativeExcusedHours = cumulativeExcusedHours.add(excusedHours);
 
             if (lines.contains("cumulativeTotal")) {
-                resultLines.computeIfAbsent("cumulativeTotal", k -> new ArrayList<>())
+                result.computeIfAbsent("cumulativeTotal" + keySuffix, k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), cumulativeTotal));
             }
             if (lines.contains("semesterTotal")) {
-                resultLines.computeIfAbsent("semesterTotal", k -> new ArrayList<>())
+                result.computeIfAbsent("semesterTotal" + keySuffix, k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), totalInSemester));
             }
             if (lines.contains("academic")) {
-                resultLines.computeIfAbsent("academic", k -> new ArrayList<>())
+                result.computeIfAbsent("academic" + keySuffix, k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), academicScore));
             }
             if (lines.contains("achievements")) {
-                resultLines.computeIfAbsent("achievements", k -> new ArrayList<>())
+                result.computeIfAbsent("achievements" + keySuffix, k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), cumulativeAchievements));
             }
-
-            // --- ИЗМЕНЕНИЯ: Обработка новых линий для часов ---
             if (lines.contains("excused")) {
-                resultLines.computeIfAbsent("excused", k -> new ArrayList<>())
+                result.computeIfAbsent("excused" + keySuffix, k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), cumulativeExcusedHours));
             }
             if (lines.contains("unexcused")) {
-                resultLines.computeIfAbsent("unexcused", k -> new ArrayList<>())
+                result.computeIfAbsent("unexcused" + keySuffix, k -> new ArrayList<>())
                         .add(new DynamicsPointDto(detail.getSemester(), cumulativeUnexcusedHours));
             }
         }
-
-        return new WidgetDataDto("Динамика моего рейтинга", "MULTI_LINE_CHART", resultLines);
+        return result;
     }
 
     private record CommonFilters(Integer facultyId, Integer formationYear, Integer groupId, List<String> assessmentTypes, String educationForm) {}
