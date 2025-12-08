@@ -12,6 +12,7 @@ import com.andrey.rating_system_project.model.User;
 import com.andrey.rating_system_project.model.enums.EducationForm;
 import com.andrey.rating_system_project.model.enums.UserStatus;
 import com.andrey.rating_system_project.repository.*;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -66,6 +67,10 @@ public class UserService implements UserDetailsService {
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByLogin(username);
+
+        if (user.getStatus() == UserStatus.BLOCKED) {
+            throw new DisabledException("Учетная запись пользователя заблокирована.");
+        }
 
         if (user.getRole() == null) {
             throw new UsernameNotFoundException("User has not been approved yet");
@@ -196,5 +201,23 @@ public class UserService implements UserDetailsService {
             throw new ResourceNotFoundException("User not found with id: " + id);
         }
         userRepository.deleteById(id);
+    }
+
+    public List<User> findManageableUsers() {
+        return userRepository.findByStatusInWithDetails(List.of(UserStatus.ACTIVE, UserStatus.BLOCKED));
+    }
+
+    @Transactional
+    public User toggleUserStatus(Integer userId) {
+        User user = findUserById(userId);
+
+        // Не меняем статус у пользователей в ожидании или других статусах
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            user.setStatus(UserStatus.BLOCKED);
+        } else if (user.getStatus() == UserStatus.BLOCKED) {
+            user.setStatus(UserStatus.ACTIVE);
+        }
+
+        return userRepository.save(user);
     }
 }

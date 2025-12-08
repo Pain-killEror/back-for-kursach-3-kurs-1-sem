@@ -11,6 +11,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import com.andrey.rating_system_project.model.enums.UserStatus;
+
+
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
 
@@ -31,4 +34,16 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     @Query(value = "SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as label, COUNT(id) as count FROM users WHERE created_at >= CURDATE() - INTERVAL 7 DAY GROUP BY label ORDER BY label ASC", nativeQuery = true)
     List<StatItemDto> countRegistrationsLast7Days();
+
+    //List<User> findByStatusIn(List<UserStatus> statuses);
+
+    @Query("SELECT u FROM User u " +
+            "LEFT JOIN FETCH u.role " +
+            "LEFT JOIN FETCH u.faculty " +
+            "LEFT JOIN FETCH u.studentInfo si " +
+            "LEFT JOIN FETCH si.group g " +
+            "LEFT JOIN FETCH g.specialty s " +
+            "LEFT JOIN FETCH s.faculty " +
+            "WHERE u.status IN :statuses")
+    List<User> findByStatusInWithDetails(List<UserStatus> statuses);
 }

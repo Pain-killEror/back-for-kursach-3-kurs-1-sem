@@ -76,4 +76,19 @@ public class UserController {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/manageable")
+    public ResponseEntity<List<UserResponseDto>> getManageableUsers() {
+        List<User> users = userService.findManageableUsers();
+        List<UserResponseDto> userDtos = users.stream()
+                .map(UserResponseDto::new)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(userDtos);
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<UserResponseDto> toggleUserStatus(@PathVariable Integer id) {
+        User updatedUser = userService.toggleUserStatus(id);
+        return ResponseEntity.ok(new UserResponseDto(updatedUser));
+    }
 }
