@@ -69,4 +69,11 @@ public class UserController {
         userService.assignStudentToGroup(studentId, groupId);
         return ResponseEntity.ok().build();
     }
+
+    // --- НОВЫЙ ЭНДПОИНТ ДЛЯ УДАЛЕНИЯ ---
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Integer id) {
+        userService.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
 }

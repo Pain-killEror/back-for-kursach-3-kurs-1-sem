@@ -42,7 +42,19 @@ public class SecurityConfig {
                 .cors(withDefaults()) // Используем глобальную конфигурацию CORS
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/users/register").permitAll()
+                        // Открытые эндпоинты (вход, регистрация, ошибки)
+                        .requestMatchers("/api/auth/**", "/api/users/register", "/error").permitAll()
+
+                        // Справочники (доступны всем авторизованным)
+                        // ДОБАВИЛИ: /api/subjects/**
+                        .requestMatchers("/api/groups/**", "/api/faculties/**", "/api/specialties/**", "/api/subjects/**").authenticated()
+
+                        // Остальные защищенные эндпоинты
+                        .requestMatchers("/api/users/**").authenticated()
+                        .requestMatchers("/api/analytics/**").authenticated()
+                        .requestMatchers("/api/grades/**").authenticated()
+
+                        // Любой другой запрос требует аутентификации
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -65,13 +77,14 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    // Добавляем глобальную конфигурацию CORS вместо аннотаций @CrossOrigin
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://127.0.0.1:5500", "http://localhost:5500"));
+        configuration.setAllowedOrigins(List.of("http://127.0.0.1:5500", "http://localhost:5500", "http://localhost:3000"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowCredentials(true);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

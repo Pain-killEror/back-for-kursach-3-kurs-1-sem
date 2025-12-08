@@ -7,6 +7,7 @@ import com.andrey.rating_system_project.model.Faculty;
 import com.andrey.rating_system_project.model.Group;
 import com.andrey.rating_system_project.model.Role;
 import com.andrey.rating_system_project.model.StudentInfo;
+import com.andrey.rating_system_project.model.Subject;
 import com.andrey.rating_system_project.model.User;
 import com.andrey.rating_system_project.model.enums.EducationForm;
 import com.andrey.rating_system_project.model.enums.UserStatus;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 @Service
@@ -31,14 +33,19 @@ public class UserService implements UserDetailsService {
     private final GroupRepository groupRepository;
     private final FacultyRepository facultyRepository;
     private final StudentInfoRepository studentInfoRepository;
+    // Добавляем репозиторий предметов
+    private final SubjectRepository subjectRepository;
 
-    public UserService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, GroupRepository groupRepository, FacultyRepository facultyRepository, StudentInfoRepository studentInfoRepository) {
+    public UserService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder,
+                       GroupRepository groupRepository, FacultyRepository facultyRepository,
+                       StudentInfoRepository studentInfoRepository, SubjectRepository subjectRepository) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.groupRepository = groupRepository;
         this.facultyRepository = facultyRepository;
         this.studentInfoRepository = studentInfoRepository;
+        this.subjectRepository = subjectRepository;
     }
 
     public List<User> findAllUsers() {
@@ -79,7 +86,6 @@ public class UserService implements UserDetailsService {
         if (userRepository.existsByEmail(userDto.getEmail())) {
             throw new IllegalArgumentException("User with this email already exists");
         }
-
         User user = new User();
         user.setLogin(userDto.getLogin());
         user.setPassword(passwordEncoder.encode(userDto.getPassword()));
@@ -94,8 +100,10 @@ public class UserService implements UserDetailsService {
     @Transactional
     public User approveUser(Integer userId, Integer roleId) {
         User user = findUserById(userId);
+
         if (user.getStatus() != UserStatus.PENDING) {
-            throw new IllegalStateException("User is not in PENDING status and cannot be approved.");
+            // Можно просто проигнорировать, если пользователь уже подтвержден
+            // throw new IllegalStateException("User is not in PENDING status.");
         }
 
         Role role = roleRepository.findById(roleId)
@@ -104,17 +112,14 @@ public class UserService implements UserDetailsService {
         user.setRole(role);
         user.setStatus(UserStatus.ACTIVE);
 
-        // Если пользователю присваивается роль Студент, создаем для него пустой StudentInfo
         if (role.getName().equals("STUDENT")) {
-            if (!studentInfoRepository.existsById(userId)) {
+            if (user.getStudentInfo() == null) {
                 StudentInfo studentInfo = new StudentInfo();
-                studentInfo.setId(userId);
                 studentInfo.setUser(user);
                 studentInfo.setEducationForm(EducationForm.BUDGET); // По умолчанию
-                studentInfoRepository.save(studentInfo);
+                user.setStudentInfo(studentInfo);
             }
         }
-
         return userRepository.save(user);
     }
 
@@ -125,21 +130,40 @@ public class UserService implements UserDetailsService {
         if (updateDto.getFullName() != null) {
             user.setFullName(updateDto.getFullName());
         }
+
         if (updateDto.getEmail() != null) {
             user.setEmail(updateDto.getEmail());
         }
 
+        // Обновление факультета
         if (updateDto.getFacultyId() != null) {
             Faculty faculty = facultyRepository.findById(updateDto.getFacultyId())
                     .orElseThrow(() -> new ResourceNotFoundException("Faculty not found"));
             user.setFaculty(faculty);
         }
 
+        // Обновление группы (для студентов)
         if (updateDto.getGroupId() != null) {
             if (user.getRole() != null && user.getRole().getName().equals("STUDENT")) {
-                assignStudentToGroup(userId, updateDto.getGroupId());
-            } else {
-                throw new IllegalStateException("Cannot assign a group to a non-student user.");
+                Group group = groupRepository.findById(updateDto.getGroupId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
+
+                if (user.getStudentInfo() == null) {
+                    StudentInfo info = new StudentInfo();
+                    info.setUser(user);
+                    info.setEducationForm(EducationForm.BUDGET);
+                    user.setStudentInfo(info);
+                }
+                user.getStudentInfo().setGroup(group);
+            }
+        }
+
+        // НОВАЯ ЛОГИКА: Обновление предметов (для преподавателей)
+        if (updateDto.getSubjectIds() != null) {
+            if (user.getRole() != null && user.getRole().getName().equals("TEACHER")) {
+                List<Subject> subjects = subjectRepository.findAllById(updateDto.getSubjectIds());
+                // Set, так как отношение ManyToMany
+                user.setSubjects(new HashSet<>(subjects));
             }
         }
 
@@ -156,10 +180,21 @@ public class UserService implements UserDetailsService {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found with id: " + groupId));
 
-        StudentInfo studentInfo = studentInfoRepository.findById(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student info not found for user id: " + studentId));
+        if (user.getStudentInfo() == null) {
+            throw new ResourceNotFoundException("Student info not found for user id: " + studentId);
+        }
 
-        studentInfo.setGroup(group);
-        return studentInfoRepository.save(studentInfo);
+        user.getStudentInfo().setGroup(group);
+        userRepository.save(user);
+
+        return user.getStudentInfo();
+    }
+
+    @Transactional
+    public void deleteUser(Integer id) {
+        if (!userRepository.existsById(id)) {
+            throw new ResourceNotFoundException("User not found with id: " + id);
+        }
+        userRepository.deleteById(id);
     }
 }
