@@ -2,6 +2,7 @@ package com.andrey.rating_system_project.controller;
 
 import com.andrey.rating_system_project.dto.analytics.AnalyticsRequestDto;
 import com.andrey.rating_system_project.dto.analytics.AnalyticsResponseDto;
+import com.andrey.rating_system_project.dto.analytics.StatItemDto;
 import com.andrey.rating_system_project.service.AnalyticsService;
 import com.andrey.rating_system_project.service.ExportService;
 import org.springframework.http.HttpHeaders;
@@ -11,7 +12,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/analytics")
@@ -54,5 +58,32 @@ public class AnalyticsController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
                 .contentType(mediaType)
                 .body(fileContent);
+    }
+
+    @GetMapping("/admin-report")
+    public ResponseEntity<byte[]> exportAdminReport() throws IOException {
+        // 1. Получаем данные для виджетов, как если бы мы запрашивали их для дашборда
+        // Для этого создаем временный запрос
+        AnalyticsRequestDto requestDto = new AnalyticsRequestDto();
+        Map<String, Object> filters = new HashMap<>();
+        filters.put("adminId", 0); // Добавляем ключ, чтобы сработала логика для администратора. Значение не важно.
+        requestDto.setFilters(filters);
+        requestDto.setWidgetIds(List.of("roleStatistics", "userStatusOverview"));
+
+        AnalyticsResponseDto analyticsData = analyticsService.getAnalytics(requestDto);
+
+        // 2. Извлекаем данные из ответа
+        List<StatItemDto> roleStats = (List<StatItemDto>) analyticsData.getWidgets().get("roleStatistics").getData();
+        List<StatItemDto> userStatusStats = (List<StatItemDto>) analyticsData.getWidgets().get("userStatusOverview").getData();
+
+        // 3. Генерируем PDF
+        byte[] pdfContent = exportService.generateAdminReport(roleStats, userStatusStats);
+
+        String filename = "admin_report_" + LocalDate.now() + ".pdf";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfContent);
     }
 }

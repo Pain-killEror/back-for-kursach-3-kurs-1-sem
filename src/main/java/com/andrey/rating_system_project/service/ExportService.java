@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.andrey.rating_system_project.dto.analytics.StatItemDto;
 
 @Service
 public class ExportService {
@@ -315,6 +316,102 @@ public class ExportService {
             case "SPORTS": return "Спорт";
             case "CULTURE": return "Культура";
             default: return cat;
+        }
+    }
+
+    public byte[] generateAdminReport(List<StatItemDto> roleStats, List<StatItemDto> userStatusStats) throws IOException {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Document document = new Document(PageSize.A4);
+            PdfWriter.getInstance(document, out);
+            document.open();
+
+            // --- Шрифты (копируем из существующего метода) ---
+            BaseFont bf;
+            try {
+                // Убедитесь, что шрифт arial.ttf есть в /resources/fonts/
+                ClassPathResource fontResource = new ClassPathResource("fonts/arial.ttf");
+                if (fontResource.exists()) {
+                    bf = BaseFont.createFont(fontResource.getPath(), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                } else {
+                    bf = BaseFont.createFont("c:/windows/fonts/arial.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                }
+            } catch (Exception e) {
+                bf = BaseFont.createFont(BaseFont.HELVETICA, "Cp1251", BaseFont.NOT_EMBEDDED);
+            }
+
+            com.lowagie.text.Font titleFont = new com.lowagie.text.Font(bf, 16, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font headerFont = new com.lowagie.text.Font(bf, 12, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font normalFont = new com.lowagie.text.Font(bf, 10, com.lowagie.text.Font.NORMAL);
+            com.lowagie.text.Font smallFont = new com.lowagie.text.Font(bf, 9, com.lowagie.text.Font.ITALIC, Color.GRAY);
+
+            // --- Заголовок документа ---
+            Paragraph title = new Paragraph("Административный отчет", titleFont);
+            title.setAlignment(Element.ALIGN_CENTER);
+            document.add(title);
+
+            String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+            Paragraph dateP = new Paragraph("Сформировано: " + dateStr, smallFont);
+            dateP.setAlignment(Element.ALIGN_RIGHT);
+            dateP.setSpacingAfter(20);
+            document.add(dateP);
+
+            // --- Секция "Распределение персонала по ролям" ---
+            addStatsSection(document, "Распределение персонала по ролям", roleStats, headerFont, normalFont, true);
+
+            // --- Секция "Статистика по статусам пользователей" ---
+            addStatsSection(document, "Статистика по статусам пользователей", userStatusStats, headerFont, normalFont, false);
+
+            document.close();
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при создании PDF отчета для администратора", e);
+        }
+    }
+
+    /**
+     * Вспомогательный метод для добавления секции со статистикой в PDF.
+     */
+    private void addStatsSection(Document document, String title, List<StatItemDto> stats, com.lowagie.text.Font headerFont, com.lowagie.text.Font normalFont, boolean isRole) {
+        Paragraph sectionTitle = new Paragraph(title, headerFont);
+        sectionTitle.setSpacingBefore(15);
+        sectionTitle.setSpacingAfter(10);
+        document.add(sectionTitle);
+
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(100);
+
+        // Заголовки таблицы
+        addHeaderCell(table, isRole ? "Роль" : "Статус", headerFont);
+        addHeaderCell(table, "Количество", headerFont);
+
+        // Данные таблицы
+        for (StatItemDto item : stats) {
+            table.addCell(new Phrase(translateLabel(item.getLabel(), isRole), normalFont));
+            table.addCell(new Phrase(String.valueOf(item.getCount()), normalFont));
+        }
+        document.add(table);
+    }
+
+    /**
+     * Вспомогательный метод для перевода системных названий.
+     */
+    private String translateLabel(String label, boolean isRole) {
+        if (isRole) {
+            switch(label) {
+                case "ADMINISTRATOR": return "Администратор";
+                case "DEAN_STAFF": return "Сотрудник деканата";
+                case "TEACHER": return "Преподаватель";
+                case "STUDENT": return "Студент";
+                case "RECTORATE_STAFF": return "Сотрудник ректората";
+                default: return label;
+            }
+        } else {
+            switch(label) {
+                case "ACTIVE": return "Активные";
+                case "PENDING": return "Ожидают подтверждения";
+                case "BLOCKED": return "Заблокированные";
+                default: return label;
+            }
         }
     }
 }
