@@ -12,5 +12,8 @@ import java.math.BigDecimal;
 public class StudentAverageDto {
     private Integer studentId;
     private String studentFullName;
-    private BigDecimal averageMark; // Средний балл (например, 8.5)
+    private BigDecimal averageMark;
+    private Long excusedAbsences;      // Пропуски по уважительной причине (часы)
+    private Long unexcusedAbsences;    // Пропуски по неуважительной причине (часы)
+    private BigDecimal extracurricularScore; // Баллы за внеучебную деятельность
 }

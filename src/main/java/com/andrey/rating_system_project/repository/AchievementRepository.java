@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Repository
@@ -78,5 +79,9 @@ public interface AchievementRepository extends JpaRepository<Achievement, Intege
             ORDER BY f.name, at.category
             """, nativeQuery = true)
     List<FacultyActivityDto> getFacultyExtracurricularActivity();
+
+    @Query("SELECT COALESCE(SUM(a.pointsAwarded), 0.0) FROM Achievement a " +
+            "WHERE a.student.id = :studentId")
+    BigDecimal sumPointsByStudentId(@Param("studentId") Integer studentId);
 
 }

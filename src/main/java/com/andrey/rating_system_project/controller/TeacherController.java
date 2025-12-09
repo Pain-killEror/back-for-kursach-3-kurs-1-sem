@@ -5,6 +5,7 @@ import com.andrey.rating_system_project.model.Group;
 import com.andrey.rating_system_project.model.StudentAbsence;
 import com.andrey.rating_system_project.model.StudentGrade;
 import com.andrey.rating_system_project.model.User;
+import com.andrey.rating_system_project.model.enums.AbsenceReasonType;
 import com.andrey.rating_system_project.repository.*;
 import com.andrey.rating_system_project.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class TeacherController {
     private final StudentGradeRepository gradeRepository;
     private final StudentAbsenceRepository absenceRepository;
     private final GroupRepository groupRepository;
+    private final AchievementRepository achievementRepository;
 
     @GetMapping("/my-subjects")
     public ResponseEntity<List<SubjectDto>> getMySubjects(Authentication authentication) {
@@ -88,11 +90,31 @@ public class TeacherController {
         List<StudentAverageDto> result = new ArrayList<>();
 
         for (var student : shortDtos) {
-            BigDecimal avg = gradeRepository.getAverageMarkByStudentAndSubject(student.getStudentId(), subjectId);
-            // Округляем до 2 знаков
-            avg = avg.setScale(2, BigDecimal.ROUND_HALF_UP);
-            result.add(new StudentAverageDto(student.getStudentId(), student.getStudentFullName(), avg));
+            // 1. Средний балл (как и раньше)
+            BigDecimal avgMark = gradeRepository.getAverageMarkByStudentAndSubject(student.getStudentId(), subjectId)
+                    .setScale(2, BigDecimal.ROUND_HALF_UP);
+
+            // 2. Считаем пропуски по уважительной (часы)
+            Long excused = absenceRepository.countTotalHoursByStudentAndReason(
+                    student.getStudentId(), AbsenceReasonType.EXCUSED);
+
+            // 3. Считаем пропуски по неуважительной (часы)
+            Long unexcused = absenceRepository.countTotalHoursByStudentAndReason(
+                    student.getStudentId(), AbsenceReasonType.UNEXCUSED);
+
+            // 4. Считаем баллы за внеучебную деятельность
+            BigDecimal extraScore = achievementRepository.sumPointsByStudentId(student.getStudentId());
+
+            result.add(new StudentAverageDto(
+                    student.getStudentId(),
+                    student.getStudentFullName(),
+                    avgMark,
+                    excused,
+                    unexcused,
+                    extraScore
+            ));
         }
+
         return ResponseEntity.ok(result);
     }
 
@@ -111,4 +133,6 @@ public class TeacherController {
 
         return ResponseEntity.ok(dtos);
     }
+
+
 }
