@@ -245,7 +245,17 @@ public class AnalyticsService {
         return new WidgetDataDto("Последние действия", "LOG_LIST", logDtos);
     }
     private WidgetDataDto calculateRegistrationDynamics() {
-        List<StatItemDto> stats = userRepository.countRegistrationsLast7Days();
+        // Получаем "сырые" данные (массив объектов) из базы
+        List<Object[]> rawData = userRepository.countRegistrationsLast7DaysRaw();
+
+        // Преобразуем их в DTO
+        List<StatItemDto> stats = rawData.stream()
+                .map(row -> new StatItemDto(
+                        (String) row[0],                // label (дата)
+                        ((Number) row[1]).longValue()   // count (количество). Number позволяет безопасно брать и Integer и BigInteger
+                ))
+                .collect(Collectors.toList());
+
         return new WidgetDataDto("Динамика регистраций (7 дней)", "LINE_CHART", stats);
     }
     private WidgetDataDto calculateMyStudentPerformance(Map<String, Object> filters) {

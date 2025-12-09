@@ -8,7 +8,9 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long> {
@@ -299,4 +301,14 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
             ) as combined_data ORDER BY semester ASC, category
             """, nativeQuery = true)
     List<Object[]> getDetailedBreakdownBySemester(@Param("studentId") Integer studentId);
+
+    Optional<StudentGrade> findFirstByStudentIdAndSubjectIdAndExamDate(Integer studentId, Integer subjectId, LocalDate examDate);
+
+    @Query("SELECT COALESCE(AVG(sg.mark), 0.0) " +
+            "FROM StudentGrade sg " +
+            "WHERE sg.student.id = :studentId AND sg.subject.id = :subjectId")
+    BigDecimal getAverageMarkByStudentAndSubject(
+            @Param("studentId") Integer studentId,
+            @Param("subjectId") Integer subjectId);
+    // (Опционально) Метод поиска по дате, который мы делали ранее:
 }

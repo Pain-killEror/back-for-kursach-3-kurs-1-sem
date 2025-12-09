@@ -25,4 +25,15 @@ public interface GroupRepository extends JpaRepository<Group, Integer> {
     // НОВЫЙ МЕТОД: Подсчет студентов в группе
     @Query("SELECT COUNT(si) FROM StudentInfo si WHERE si.group.id = :groupId")
     Long countStudentsInGroup(@Param("groupId") Integer groupId);
+
+    @Query(value = "SELECT DISTINCT g.id, g.name " +
+            "FROM `groups` g " +
+            "JOIN students_info si ON si.group_id = g.id " +
+            "JOIN student_grades sg ON sg.student_user_id = si.user_id " +
+            "WHERE sg.teacher_user_id = :teacherId " +
+            "AND sg.subject_id = :subjectId " +
+            "LIMIT 10", nativeQuery = true)
+    List<Object[]> findRelevantGroupsForTeacher(
+            @Param("teacherId") Integer teacherId,
+            @Param("subjectId") Integer subjectId);
 }
