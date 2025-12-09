@@ -1,14 +1,14 @@
 package com.andrey.rating_system_project.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.NoArgsConstructor; // Убедитесь, что эта аннотация есть
+
+import java.util.List;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
+@NoArgsConstructor // Lombok создаст пустой конструктор
 public class JournalStudentDto {
     private Integer studentId;
     private String studentFullName;
-    private String todayMark; // Будет хранить "8", "Н" или null
+    private List<JournalEventDto> events;
 }

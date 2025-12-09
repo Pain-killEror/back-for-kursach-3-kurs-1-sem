@@ -311,4 +311,6 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
             @Param("studentId") Integer studentId,
             @Param("subjectId") Integer subjectId);
     // (Опционально) Метод поиска по дате, который мы делали ранее:
+
+    List<StudentGrade> findByStudentIdAndSubjectId(Integer studentId, Integer subjectId);
 }

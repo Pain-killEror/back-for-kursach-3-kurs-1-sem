@@ -5,17 +5,14 @@ import com.andrey.rating_system_project.model.Group;
 import com.andrey.rating_system_project.model.StudentAbsence;
 import com.andrey.rating_system_project.model.StudentGrade;
 import com.andrey.rating_system_project.model.User;
-import com.andrey.rating_system_project.repository.GroupRepository;
-import com.andrey.rating_system_project.repository.StudentAbsenceRepository;
-import com.andrey.rating_system_project.repository.StudentGradeRepository;
-import com.andrey.rating_system_project.repository.UserRepository;
+import com.andrey.rating_system_project.repository.*;
 import com.andrey.rating_system_project.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal; // Нам нужен только этот импорт из java.math
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,30 +47,35 @@ public class TeacherController {
             @RequestParam Integer subjectId
     ) {
         var shortDtos = userRepository.findStudentsByGroupId(groupId);
-
         List<JournalStudentDto> result = new ArrayList<>();
-        LocalDate today = LocalDate.now();
 
-        for (var student : shortDtos) {
-            String markValue = null;
-
-            Optional<StudentGrade> grade = gradeRepository.findFirstByStudentIdAndSubjectIdAndExamDate(
-                    student.getStudentId(), subjectId, today);
-
-            if (grade.isPresent()) {
-                markValue = String.valueOf(grade.get().getMark());
-            } else {
-                Optional<StudentAbsence> absence = absenceRepository.findFirstByStudentIdAndSubjectIdAndAbsenceDate(
-                        student.getStudentId(), subjectId, today);
-
-                if (absence.isPresent()) {
-                    markValue = "Н";
-                }
-            }
-
-            result.add(new JournalStudentDto(student.getStudentId(), student.getStudentFullName(), markValue));
+        // Рассчитываем текущий семестр с использованием Java Time API
+        Optional<Group> groupOpt = groupRepository.findById(groupId);
+        if (groupOpt.isEmpty()) {
+            return ResponseEntity.ok(List.of()); // Если группа не найдена
         }
+        Group group = groupOpt.get();
+        LocalDate now = LocalDate.now();
+        int currentSemester = (now.getYear() - group.getFormationYear()) * 2 + (now.getMonthValue() >= 9 ? 1 : 0);
 
+        for (var studentDto : shortDtos) {
+            JournalStudentDto journalDto = new JournalStudentDto();
+            journalDto.setStudentId(studentDto.getStudentId());
+            journalDto.setStudentFullName(studentDto.getStudentFullName());
+
+            List<JournalEventDto> events = new ArrayList<>();
+
+            // Получаем оценки (в будущем здесь будет фильтр по семестру)
+            List<StudentGrade> grades = gradeRepository.findByStudentIdAndSubjectId(studentDto.getStudentId(), subjectId);
+            grades.forEach(g -> events.add(new JournalEventDto(g.getExamDate(), String.valueOf(g.getMark()))));
+
+            // Получаем пропуски
+            List<StudentAbsence> absences = absenceRepository.findByStudentIdAndSubjectId(studentDto.getStudentId(), subjectId);
+            absences.forEach(a -> events.add(new JournalEventDto(a.getAbsenceDate(), "Н")));
+
+            journalDto.setEvents(events);
+            result.add(journalDto);
+        }
         return ResponseEntity.ok(result);
     }
 
@@ -86,47 +88,12 @@ public class TeacherController {
         List<StudentAverageDto> result = new ArrayList<>();
 
         for (var student : shortDtos) {
-            // Теперь этот метод ВСЕГДА вернет BigDecimal (например, 8.00 или 0.00)
             BigDecimal avg = gradeRepository.getAverageMarkByStudentAndSubject(student.getStudentId(), subjectId);
-
-            // Округляем до 2 знаков (COALESCE уже вернул 0.00, если оценок не было)
+            // Округляем до 2 знаков
             avg = avg.setScale(2, BigDecimal.ROUND_HALF_UP);
-
             result.add(new StudentAverageDto(student.getStudentId(), student.getStudentFullName(), avg));
         }
-
         return ResponseEntity.ok(result);
-    }
-
-    @GetMapping("/my-groups")
-    public ResponseEntity<List<GroupDto>> getMyGroups(
-            @RequestParam Integer subjectId,
-            Authentication authentication) {
-
-        User teacher = userService.findByLogin(authentication.getName());
-
-        // Это сложный запрос, его лучше вынести в сервис и репозиторий.
-        // Он должен найти все группы, у студентов которых есть предмет `subjectId`.
-        // Пока сделаем упрощенную версию:
-        // Вернем все группы, где специальность студентов изучает этот предмет.
-
-        List<Group> allGroups = groupRepository.findAll(); // Предполагаем, что у вас есть groupRepository
-
-        List<GroupDto> relevantGroups = allGroups.stream()
-                .filter(group -> {
-                    // Проверяем, есть ли в curriculum для специальности этой группы наш предмет
-                    // В реальном проекте это делается ОДНИМ SQL-запросом!
-                    if (group.getSpecialty() == null) return false;
-
-                    // Тут нужен доступ к CurriculumRepository
-                    // boolean hasSubject = curriculumRepository.existsBySpecialtyIdAndSubjectId(...)
-                    // Для примера просто вернем все группы, т.к. нет доступа ко всем репо.
-                    return true;
-                })
-                .map(GroupDto::new)
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(relevantGroups);
     }
 
     @GetMapping("/my-relevant-groups")
