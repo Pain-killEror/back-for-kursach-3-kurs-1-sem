@@ -6,14 +6,16 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
+// StudentAverageDto.java
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class StudentAverageDto {
     private Integer studentId;
     private String studentFullName;
+    private String groupName; // <--- ДОБАВИТЬ ЭТО ПОЛЕ
     private BigDecimal averageMark;
-    private Long excusedAbsences;      // Пропуски по уважительной причине (часы)
-    private Long unexcusedAbsences;    // Пропуски по неуважительной причине (часы)
-    private BigDecimal extracurricularScore; // Баллы за внеучебную деятельность
+    private Long excusedAbsences;
+    private Long unexcusedAbsences;
+    private BigDecimal extracurricularScore;
 }

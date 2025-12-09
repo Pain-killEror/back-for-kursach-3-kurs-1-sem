@@ -1,15 +1,16 @@
 package com.andrey.rating_system_project.service;
 
+import com.andrey.rating_system_project.dto.StudentAverageDto;
 import com.andrey.rating_system_project.dto.StudentJournalDto;
 import com.andrey.rating_system_project.model.StudentAbsence;
 import com.andrey.rating_system_project.model.StudentGrade;
 import com.andrey.rating_system_project.model.User;
-import com.andrey.rating_system_project.repository.StudentAbsenceRepository;
-import com.andrey.rating_system_project.repository.StudentGradeRepository;
-import com.andrey.rating_system_project.repository.UserRepository;
+import com.andrey.rating_system_project.model.enums.AbsenceReasonType;
+import com.andrey.rating_system_project.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -23,6 +24,8 @@ public class TeacherService {
     private final UserRepository userRepository;
     private final StudentGradeRepository gradeRepository;
     private final StudentAbsenceRepository absenceRepository;
+    private final AchievementRepository achievementRepository;
+    private final GroupRepository groupRepository;
 
     // Вспомогательный класс для сортировки
     private record JournalEntry(LocalDate date, String value) {}
@@ -78,5 +81,36 @@ public class TeacherService {
         // Сортировка студентов по фамилии
         journal.sort(Comparator.comparing(StudentJournalDto::getFullName));
         return journal;
+    }
+
+    public List<StudentAverageDto> getGroupPerformance(Integer groupId, Integer subjectId) {
+        // Получаем группу, чтобы знать ее имя
+        String groupName = groupRepository.findById(groupId)
+                .map(g -> g.getName())
+                .orElse("Неизвестная группа");
+
+        var students = userRepository.findStudentsByGroupId(groupId);
+        List<StudentAverageDto> result = new ArrayList<>();
+
+        for (var student : students) {
+            BigDecimal avgMark = gradeRepository.getAverageMarkByStudentAndSubject(student.getStudentId(), subjectId)
+                    .setScale(2, BigDecimal.ROUND_HALF_UP);
+
+            Long excused = absenceRepository.countTotalHoursByStudentAndReason(student.getStudentId(), AbsenceReasonType.EXCUSED);
+            Long unexcused = absenceRepository.countTotalHoursByStudentAndReason(student.getStudentId(), AbsenceReasonType.UNEXCUSED);
+            BigDecimal extraScore = achievementRepository.sumPointsByStudentId(student.getStudentId());
+
+            result.add(new StudentAverageDto(
+                    student.getStudentId(),
+                    student.getStudentFullName(),
+                    groupName, // <--- Передаем имя группы
+                    avgMark,
+                    excused,
+                    unexcused,
+                    extraScore
+            ));
+        }
+
+        return result;
     }
 }
