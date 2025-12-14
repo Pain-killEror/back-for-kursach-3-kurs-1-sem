@@ -62,13 +62,27 @@ public class AnalyticsService {
     private WidgetDataDto calculateRectorateWidgetData(String widgetId, Map<String, Object> filters) {
         switch (widgetId) {
             case "facultyPerformanceComparison":
-                return new WidgetDataDto("Сравнение факультетов", "BAR_CHART", studentGradeRepository.getFacultyPerformanceComparison());
+                return calculateFacultyPerformanceComparison();
             case "educationFormDistribution":
                 return new WidgetDataDto("Формы обучения", "PIE_CHART", studentInfoRepository.countByEducationForm());
             case "extracurricularActivityOverview":
                 return new WidgetDataDto("Внеучебная активность", "STACKED_BAR_CHART", achievementRepository.getFacultyExtracurricularActivity());
             default: return new WidgetDataDto("Неизвестный виджет для ректората", "TEXT", "Ошибка");
         }
+    }
+
+    private WidgetDataDto calculateFacultyPerformanceComparison() {
+        List<Object[]> rawData = studentGradeRepository.getFacultyPerformanceComparison();
+
+        List<FacultyComparisonDto> data = rawData.stream()
+                .map(row -> new FacultyComparisonDto(
+                        (String) row[0], // Имя факультета
+                        // Безопасное преобразование числа (AVG может вернуть double или decimal)
+                        row[1] != null ? BigDecimal.valueOf(((Number) row[1]).doubleValue()) : BigDecimal.ZERO
+                ))
+                .collect(Collectors.toList());
+
+        return new WidgetDataDto("Сравнение факультетов", "BAR_CHART", data);
     }
 
     private WidgetDataDto calculateAdminWidgetData(String widgetId, Map<String, Object> filters) {

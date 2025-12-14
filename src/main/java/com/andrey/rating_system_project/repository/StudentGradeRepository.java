@@ -278,10 +278,17 @@ public interface StudentGradeRepository extends JpaRepository<StudentGrade, Long
 
     @Query(value = """
             SELECT f.name AS facultyName, AVG(sg.mark) AS averageMark
-            FROM student_grades sg JOIN users u ON sg.student_user_id = u.id JOIN students_info si ON u.id = si.user_id JOIN `groups` g ON si.group_id = g.id JOIN faculties f ON g.faculty_id = f.id
-            WHERE sg.assessment_type IN ('EXAM', 'DIFFERENTIATED_CREDIT', 'COURSEWORK') GROUP BY f.id, f.name ORDER BY averageMark DESC
+            FROM student_grades sg
+            JOIN users u ON sg.student_user_id = u.id
+            JOIN students_info si ON u.id = si.user_id
+            JOIN `groups` g ON si.group_id = g.id
+            JOIN faculties f ON g.faculty_id = f.id
+            -- УБИРАЕМ ФИЛЬТР, ЧТОБЫ ПОКАЗАТЬ ЛЮБЫЕ ДАННЫЕ
+            -- WHERE sg.assessment_type IN ('EXAM', 'DIFFERENTIATED_CREDIT', 'COURSEWORK')
+            GROUP BY f.id, f.name
+            ORDER BY averageMark DESC
             """, nativeQuery = true)
-    List<FacultyComparisonDto> getFacultyPerformanceComparison();
+    List<Object[]> getFacultyPerformanceComparison();
 
     // --- BREAKDOWN QUERY ---
     @Query(value = """
