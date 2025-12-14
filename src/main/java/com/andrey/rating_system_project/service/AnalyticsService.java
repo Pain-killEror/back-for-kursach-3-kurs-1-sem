@@ -222,13 +222,14 @@ public class AnalyticsService {
     }
     private WidgetDataDto calculateContributionAnalysis(Map<String, Object> filters) {
         CommonFilters f = extractCommonFilters(filters);
+
+        // Получаем настоящие достижения из БД (SCIENCE, SOCIAL, SPORTS, CULTURE)
         List<ContributionItemDto> contributionData = new ArrayList<>(
-                achievementRepository.getAchievementsContribution(f.facultyId(), f.formationYear(), f.groupId()));
-        BigDecimal academicPoints = studentGradeRepository.getTotalAcademicPoints(
-                f.facultyId(), f.formationYear(), f.groupId(), f.assessmentTypes(), f.educationForm());
-        if (academicPoints != null) {
-            contributionData.add(new ContributionItemDto("ACADEMIC", academicPoints));
-        }
+                achievementRepository.getAchievementsContribution(f.facultyId(), f.formationYear(), f.groupId())
+        );
+
+        // Блок, который добавлял "ACADEMIC", УДАЛЕН.
+
         return new WidgetDataDto("Вклад в общий рейтинг", "PIE_CHART", contributionData);
     }
     private WidgetDataDto calculateRoleStatistics() {
