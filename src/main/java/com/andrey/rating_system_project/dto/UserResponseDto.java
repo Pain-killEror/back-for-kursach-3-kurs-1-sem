@@ -7,20 +7,19 @@ import lombok.Data;
 
 @Data
 public class UserResponseDto {
-
     private Integer id;
     private String login;
     private String fullName;
     private String email;
     private UserStatus status;
     private String roleName;
-
     // Информация о студенте
     private String groupName;
     private String specialtyName;
 
     // Информация о сотруднике/студенте
     private String facultyName;
+    private Integer facultyId; // <--- ДОБАВИЛИ ЭТО ПОЛЕ
 
     public UserResponseDto(User user) {
         this.id = user.getId();
@@ -28,12 +27,11 @@ public class UserResponseDto {
         this.fullName = user.getFullName();
         this.email = user.getEmail();
         this.status = user.getStatus();
-
         if (user.getRole() != null) {
             this.roleName = user.getRole().getName();
         }
 
-        // Проверяем, является ли пользователь студентом и есть ли у него studentInfo
+        // Логика для студента
         if (user.getStudentInfo() != null) {
             StudentInfo info = user.getStudentInfo();
             if (info.getGroup() != null) {
@@ -42,13 +40,15 @@ public class UserResponseDto {
                     this.specialtyName = info.getGroup().getSpecialty().getName();
                     if (info.getGroup().getSpecialty().getFaculty() != null) {
                         this.facultyName = info.getGroup().getSpecialty().getFaculty().getName();
+                        this.facultyId = info.getGroup().getSpecialty().getFaculty().getId(); // <--- Заполняем ID
                     }
                 }
             }
         }
-        // ИЗМЕНЕНИЕ: Если пользователь не студент, но у него есть привязка к факультету (например, сотрудник деканата)
+        // Логика для сотрудника деканата (привязка напрямую к факультету)
         else if (user.getFaculty() != null) {
             this.facultyName = user.getFaculty().getName();
+            this.facultyId = user.getFaculty().getId(); // <--- Заполняем ID
         }
     }
 }

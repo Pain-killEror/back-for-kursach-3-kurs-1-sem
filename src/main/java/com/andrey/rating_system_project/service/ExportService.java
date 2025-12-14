@@ -25,12 +25,22 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
 import com.andrey.rating_system_project.dto.analytics.StatItemDto;
+import com.andrey.rating_system_project.repository.StudentGradeRepository;
+import com.andrey.rating_system_project.repository.AchievementRepository;
+import com.andrey.rating_system_project.repository.FacultyRepository;
+import com.andrey.rating_system_project.model.Faculty;
+import com.andrey.rating_system_project.exception.ResourceNotFoundException;
 
 @Service
 public class ExportService {
 
     private final AnalyticsService analyticsService;
+    private final StudentGradeRepository studentGradeRepository;
+    private final AchievementRepository achievementRepository;
+    private final FacultyRepository facultyRepository;
 
     // Словарь названий колонок
     private static final Map<String, String> COLUMN_TITLES = Map.of(
@@ -40,10 +50,15 @@ public class ExportService {
             "totalScore", "Итого"
     );
 
-    public ExportService(AnalyticsService analyticsService) {
+    public ExportService(AnalyticsService analyticsService,
+                         StudentGradeRepository studentGradeRepository,
+                         AchievementRepository achievementRepository,
+                         FacultyRepository facultyRepository) { // <--- ДОБАВИТЬ СЮДА
         this.analyticsService = analyticsService;
+        this.studentGradeRepository = studentGradeRepository;
+        this.achievementRepository = achievementRepository;
+        this.facultyRepository = facultyRepository; // <--- И СЮДА
     }
-
     public byte[] generateReport(Integer studentId, String context, Long semester, String format, List<String> columns) throws IOException {
         // 1. Получение данных
         Map<String, Object> filters = new HashMap<>();
@@ -412,6 +427,132 @@ public class ExportService {
                 case "BLOCKED": return "Заблокированные";
                 default: return label;
             }
+        }
+    }
+
+    public byte[] generateDeanReport(Integer facultyId, Integer formationYear) throws IOException {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Document document = new Document(PageSize.A4);
+            PdfWriter.getInstance(document, out);
+            document.open();
+
+            // 1. Получаем название факультета из БД
+            Faculty faculty = facultyRepository.findById(facultyId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Faculty not found"));
+            String facultyName = faculty.getName();
+
+            // --- Шрифты ---
+            BaseFont bf;
+            try {
+                ClassPathResource fontResource = new ClassPathResource("fonts/arial.ttf");
+                if (fontResource.exists()) {
+                    bf = BaseFont.createFont(fontResource.getPath(), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                } else {
+                    bf = BaseFont.createFont("c:/windows/fonts/arial.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                }
+            } catch (Exception e) {
+                bf = BaseFont.createFont(BaseFont.HELVETICA, "Cp1251", BaseFont.NOT_EMBEDDED);
+            }
+            com.lowagie.text.Font titleFont = new com.lowagie.text.Font(bf, 16, com.lowagie.text.Font.BOLD);
+            // Шрифт для факультета (чуть крупнее обычного, но меньше заголовка)
+            com.lowagie.text.Font facultyFont = new com.lowagie.text.Font(bf, 14, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font headerFont = new com.lowagie.text.Font(bf, 10, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font groupFont = new com.lowagie.text.Font(bf, 14, com.lowagie.text.Font.BOLD, new Color(0, 86, 179));
+            com.lowagie.text.Font normalFont = new com.lowagie.text.Font(bf, 10, com.lowagie.text.Font.NORMAL);
+
+            // --- Добавляем название факультета ---
+            Paragraph facultyTitle = new Paragraph(facultyName, facultyFont);
+            facultyTitle.setAlignment(Element.ALIGN_CENTER);
+            facultyTitle.setSpacingAfter(5); // Немного отступа
+            document.add(facultyTitle);
+
+            // --- Заголовок отчета ---
+            Paragraph title = new Paragraph("Отчет по рейтингу (Год набора: " + formationYear + ")", titleFont);
+            title.setAlignment(Element.ALIGN_CENTER);
+            title.setSpacingAfter(20);
+            document.add(title);
+
+            // ==========================================
+            // ЧАСТЬ 1: Список студентов по группам
+            // ==========================================
+
+            // 1. Получаем всех студентов курса
+            List<StudentRankingDto> allStudents = studentGradeRepository.getStudentRankingList(
+                    facultyId, formationYear, null, null, null
+            );
+
+            // 2. Группируем по названию группы
+            Map<String, List<StudentRankingDto>> studentsByGroup = allStudents.stream()
+                    .collect(Collectors.groupingBy(s -> s.getGroupName() != null ? s.getGroupName() : "Без группы"));
+
+            // 3. Рисуем таблицы для каждой группы
+            for (Map.Entry<String, List<StudentRankingDto>> entry : studentsByGroup.entrySet()) {
+                String groupName = entry.getKey();
+                List<StudentRankingDto> students = entry.getValue();
+
+                // Заголовок группы
+                Paragraph groupTitle = new Paragraph("Группа " + groupName, groupFont);
+                groupTitle.setSpacingBefore(15);
+                groupTitle.setSpacingAfter(5);
+                document.add(groupTitle);
+
+                PdfPTable table = new PdfPTable(new float[]{1, 4, 2, 2, 2, 2}); // Пропорции колонок
+                table.setWidthPercentage(100);
+
+                // Шапка таблицы
+                addHeaderCell(table, "№", headerFont);
+                addHeaderCell(table, "ФИО", headerFont);
+                addHeaderCell(table, "Академ.", headerFont);
+                addHeaderCell(table, "Внеуч.", headerFont);
+                addHeaderCell(table, "Штраф", headerFont);
+                addHeaderCell(table, "Итого", headerFont);
+
+                // Строки студентов
+                int i = 1;
+                for (StudentRankingDto s : students) {
+                    addCell(table, String.valueOf(i++), normalFont, null);
+                    addCell(table, s.getFullName(), normalFont, null);
+                    addCell(table, String.format("%.2f", s.getAcademicScore()), normalFont, null);
+                    addCell(table, String.format("%.2f", s.getExtracurricularScore()), normalFont, null);
+                    addCell(table, String.format("%.2f", s.getAbsencePenalty()), normalFont, null);
+                    // Жирный шрифт для итогового балла
+                    com.lowagie.text.Font boldValFont = new com.lowagie.text.Font(bf, 10, com.lowagie.text.Font.BOLD);
+                    addCell(table, String.format("%.2f", s.getTotalScore()), boldValFont, null);
+                }
+                document.add(table);
+            }
+
+            // ==========================================
+            // ЧАСТЬ 2: Вклад в рейтинг (Таблица)
+            // ==========================================
+
+            document.newPage(); // Начинаем с новой страницы, если нужно
+            Paragraph contribTitle = new Paragraph("Статистика: Вклад в рейтинг", titleFont);
+            contribTitle.setSpacingBefore(20);
+            contribTitle.setSpacingAfter(10);
+            document.add(contribTitle);
+
+            // Получаем данные о достижениях
+            List<ContributionItemDto> contributions = achievementRepository.getAchievementsContribution(facultyId, formationYear, null);
+
+            PdfPTable contribTable = new PdfPTable(new float[]{3, 2});
+            contribTable.setWidthPercentage(60); // Таблица поуже
+            contribTable.setHorizontalAlignment(Element.ALIGN_LEFT);
+
+            addHeaderCell(contribTable, "Категория", headerFont);
+            addHeaderCell(contribTable, "Сумма баллов", headerFont);
+
+            for (ContributionItemDto item : contributions) {
+                String categoryName = translateCategory(item.getCategory()); // Используем метод перевода, который у вас уже есть
+                addCell(contribTable, categoryName, normalFont, null);
+                addCell(contribTable, String.format("%.2f", item.getTotalPoints()), normalFont, null);
+            }
+            document.add(contribTable);
+
+            document.close();
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error generating Dean PDF report", e);
         }
     }
 }

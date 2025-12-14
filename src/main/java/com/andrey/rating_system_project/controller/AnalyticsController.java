@@ -86,4 +86,18 @@ public class AnalyticsController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdfContent);
     }
+
+    @GetMapping("/dean-report")
+    public ResponseEntity<byte[]> downloadDeanReport(
+            @RequestParam Integer facultyId,
+            @RequestParam Integer formationYear
+    ) throws IOException {
+        byte[] pdfContent = exportService.generateDeanReport(facultyId, formationYear);
+
+        String filename = "dean_report.pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfContent);
+    }
 }
