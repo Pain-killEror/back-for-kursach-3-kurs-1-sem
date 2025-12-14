@@ -8,6 +8,7 @@ import com.andrey.rating_system_project.service.ExportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -95,6 +96,22 @@ public class AnalyticsController {
         byte[] pdfContent = exportService.generateDeanReport(facultyId, formationYear);
 
         String filename = "dean_report.pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfContent);
+    }
+
+    // В классе AnalyticsController добавьте этот метод:
+
+    @GetMapping("/global-report")
+    @PreAuthorize("hasAnyAuthority('RECTORATE_STAFF', 'ADMINISTRATOR')")
+    public ResponseEntity<byte[]> downloadGlobalReport() throws IOException {
+        // Сервис сам соберет все данные
+        byte[] pdfContent = exportService.generateGlobalReport();
+
+        String filename = "Global_University_Report_" + LocalDate.now() + ".pdf";
+
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
                 .contentType(MediaType.APPLICATION_PDF)
