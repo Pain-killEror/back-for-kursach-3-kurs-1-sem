@@ -54,8 +54,14 @@ public class SecurityConfig {
 
                         // Справочники (доступны всем авторизованным)
                         // ДОБАВИЛИ: /api/subjects/**
-                        .requestMatchers("/api/groups/**", "/api/faculties/**", "/api/specialties/**", "/api/subjects/**").authenticated()
-
+                        // Справочники (доступны всем авторизованным)
+                        .requestMatchers(
+                                "/api/groups/**",
+                                "/api/faculties/**",
+                                "/api/specialties/**",
+                                "/api/subjects/**",
+                                "/api/achievements/**" // <-- ДОБАВЬТЕ ЭТУ СТРОКУ
+                        ).authenticated()
                         // Остальные защищенные эндпоинты
                         .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/api/analytics/**").authenticated()
